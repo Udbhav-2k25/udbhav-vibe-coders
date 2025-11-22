@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>The Supply Chain Oracle – Shipment Delay Predictor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta
+    name="description"
+    content="The Supply Chain Oracle is a shipment delay predictor using LightGBM, XGBoost and SHAP values to forecast delays, explain risks and suggest better routes."
+  />
+  <style>
+    :root {
+      --bg: #020617;
+      --bg-card: #020617;
+      --fg: #e5e7eb;
+      --muted: #9ca3af;
+      --border: rgba(148, 163, 184, 0.4);
+      --accent: #38bdf8;
+      --accent2: #a855f7;
+      --danger: #ef4444;
+      --radius: 1rem;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        sans-serif;
+    }
+
+    body {
+      background: radial-gradient(
+          circle at top,
+          rgba(56, 189, 248, 0.12),
+          transparent 60%
+        ),
+        radial-gradient(
+          circle at bottom,
+          rgba(168, 85, 247, 0.12),
+          transparent 60%
+        ),
+        var(--bg);
+      color: var(--fg);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    a {
+      text-decoration: none;
+      color: inherit;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      backdrop-filter: blur(14px);
+      background: rgba(2, 6, 23, 0.9);
+      border-bottom: 1px solid rgba(30, 64, 175, 0.6);
+    }
+
+    .nav {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 0.7rem 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .logo {
+      font-weight: 700;
+      font-size: 1rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .logo span {
+      color: var(--accent);
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 1rem;
+      font-size: 0.9rem;
+    }
+
+    .nav-links a {
+      opacity: 0.8;
+    }
+
+    .nav-links a:hover {
+      opacity: 1;
+    }
+
+    .btn-primary {
+      padding: 0.45rem 0.9rem;
+      border-radius: 999px;
+      border: 1px solid var(--accent);
+      background: radial-gradient(
+        circle at top left,
+        rgba(56, 189, 248, 0.2),
+        rgba(15, 23, 42, 1)
+      );
+      color: var(--fg);
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 25px rgba(15, 23, 42, 0.9);
+    }
+
+    .btn-ghost {
+      padding: 0.45rem 0.9rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--fg);
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+
+    main {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 1.5rem 1rem 3rem;
+    }
+
+    section {
+      margin-top: 3rem;
+    }
+
+    /* HERO */
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.6fr) minmax(0, 1.4fr);
+      gap: 2rem;
+      margin-top: 1.5rem;
+      align-items: center;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.25rem 0.7rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      background: rgba(15, 23, 42, 0.9);
+    }
+
+    .pill-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: radial-gradient(circle, #22c55e, #16a34a);
+      box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25);
+    }
+
+    .hero-title {
+      font-size: clamp(2rem, 3vw, 2.6rem);
+      font-weight: 800;
+      margin-top: 1rem;
+    }
+
+    .hero-title span {
+      background: linear-gradient(to right, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      color: transparent;
+    }
+
+    .hero-subtitle {
+      font-size: 0.95rem;
+      margin-top: 0.75rem;
+      color: #cbd5f5;
+    }
+
+    .hero-meta {
+      font-size: 0.8rem;
+      margin-top: 0.5rem;
+      color: var(--muted);
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.7rem;
+      margin-top: 1.3rem;
+    }
+
+    .hero-note {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 0.8rem;
+    }
+
+    .hero-note strong {
+      color: var(--accent);
+    }
+
+    .hero-card {
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: rgba(2, 6, 23, 0.98);
+      padding: 1rem;
+      font-size: 0.85rem;
+      box-shadow: 0 18px 50px rgba(15, 23, 42, 0.9);
+    }
+
+    .badge {
+      display: inline-block;
+      font-size: 0.7rem;
+      padding: 0.15rem 0.6rem;
+      border-radius: 999px;
+      border: 1px solid rgba(51, 65, 85, 0.9);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .chip {
+      font-size: 0.7rem;
+      padding: 0.15rem 0.6rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .hero-card-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.5rem;
+      margin-bottom: 0.8rem;
+      align-items: flex-start;
+    }
+
+    .risk-row {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-top: 0.4rem;
+    }
+
+    .risk-label {
+      font-size: 0.8rem;
+      min-width: 4.8rem;
+    }
+
+    .risk-bar {
+      flex: 1;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.9);
+      overflow: hidden;
+    }
+
+    .risk-fill {
+      height: 100%;
+      border-radius: 999px;
+    }
+
+    .risk-green {
+      width: 65%;
+      background: linear-gradient(to right, #22c55e, #4ade80);
+    }
+
+    .risk-yellow {
+      width: 22%;
+      background: linear-gradient(to right, #eab308, #facc15);
+    }
+
+    .risk-red {
+      width: 13%;
+      background: linear-gradient(to right, #f97316, #ef4444);
+    }
+
+    .risk-value {
+      font-size: 0.8rem;
+      min-width: 2.8rem;
+      text-align: right;
+    }
+
+    .hero-footnote {
+      margin-top: 0.7rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    .hero-footnote strong {
+      color: var(--accent);
+    }
+
+    /* Sections */
+
+    .section-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 0.2rem;
+    }
+
+    .section-subtitle {
+      font-size: 0.9rem;
+      color: var(--muted);
+      max-width: 36rem;
+    }
+
+    .grid-2,
+    .grid-3 {
+      display: grid;
+      gap: 1.2rem;
+      margin-top: 1.4rem;
+    }
+
+    .grid-2 {
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    }
+
+    .grid-3 {
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+
+    .card {
+      border-radius: 0.9rem;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      padding: 1rem;
+      font-size: 0.88rem;
+    }
+
+    .tag {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      margin-bottom: 0.25rem;
+    }
+
+    .card ul {
+      margin-top: 0.4rem;
+      padding-left: 1.1rem;
+      font-size: 0.85rem;
+    }
+
+    .card ul li + li {
+      margin-top: 0.25rem;
+    }
+
+    /* AI Engine */
+
+    .stack-badges {
+      margin-top: 0.6rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    .stack-badge {
+      font-size: 0.75rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(15, 23, 42, 0.95);
+    }
+
+    .shap-bars {
+      margin-top: 0.7rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      font-size: 0.8rem;
+    }
+
+    .shap-row-label {
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      margin-bottom: 0.1rem;
+    }
+
+    .shap-bg {
+      width: 100%;
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.9);
+      overflow: hidden;
+    }
+
+    .shap-fill {
+      height: 100%;
+      background: linear-gradient(to right, var(--accent2), var(--danger));
+    }
+
+    /* Contact */
+
+    .contact-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.3rem;
+      margin-top: 1.4rem;
+    }
+
+    .form-card label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 0.2rem;
+    }
+
+    .form-card input,
+    .form-card textarea {
+      width: 100%;
+      padding: 0.5rem 0.6rem;
+      border-radius: 0.6rem;
+      border: 1px solid rgba(51, 65, 85, 0.95);
+      background: #020617;
+      color: var(--fg);
+      font-size: 0.85rem;
+      margin-bottom: 0.6rem;
+      outline: none;
+    }
+
+    .form-card textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    .form-card input:focus,
+    .form-card textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.4);
+    }
+
+    footer {
+      margin-top: 3rem;
+      padding-top: 1rem;
+      border-top: 1px solid rgba(30, 64, 175, 0.7);
+      font-size: 0.78rem;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    @media (max-width: 800px) {
+      .hero {
+        grid-template-columns: 1fr;
+      }
+
+      .nav-links {
+        display: none;
+      }
+
+      main {
+        padding-inline: 0.9rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="nav">
+      <div class="logo">SUPPLY CHAIN <span>ORACLE</span></div>
+      <nav class="nav-links">
+        <a href="#mission">Mission</a>
+        <a href="#mvp">MVP</a>
+        <a href="#ai-engine">AI Engine</a>
+        <a href="#contact">Contact</a>
+      </nav>
+      <button
+        class="btn-primary"
+        onclick="document.getElementById('contact').scrollIntoView({behavior:'smooth'})"
+      >
+        Request Demo
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <!-- HERO -->
+    <section class="hero">
+      <div>
+        <div class="pill">
+          <span class="pill-dot"></span>
+          Shipment Delay Predictor · ID: udbhav_013
+        </div>
+
+        <h1 class="hero-title">
+          A <span>weather forecast</span> for your shipments.
+        </h1>
+
+        <p class="hero-subtitle">
+          <strong>The Supply Chain Oracle</strong> predicts shipment delays
+          <strong>before</strong> they happen, tells you
+          <strong>why</strong> they are at risk, and suggests
+          <strong>faster routes or carriers</strong> so managers can act early
+          instead of reacting after delays.
+        </p>
+
+        <p class="hero-meta">
+          Built for logistics companies that track hundreds or thousands of
+          daily shipments and can’t afford late deliveries.
+        </p>
+
+        <div class="hero-actions">
+          <button
+            class="btn-primary"
+            onclick="document.getElementById('ai-engine').scrollIntoView({behavior:'smooth'})"
+          >
+            View ML Stack (LightGBM · XGBoost · SHAP)
+          </button>
+          <button
+            class="btn-ghost"
+            onclick="document.getElementById('mvp').scrollIntoView({behavior:'smooth'})"
+          >
+            Explore MVP Features →
+          </button>
+        </div>
+
+        <p class="hero-note">
+          <strong>Functional Mission:</strong> logistics companies lose money
+          when packages arrive late. Oracle acts like a
+          <strong>“weather forecast” for shipping</strong>, helping managers
+          choose better routes in advance.
+        </p>
+      </div>
+
+      <aside class="hero-card">
+        <div class="hero-card-top">
+          <div>
+            <span class="badge">Live Risk Snapshot</span>
+            <div style="margin-top: 0.3rem; font-weight: 600;">
+              Northern Corridor · 120 active shipments
+            </div>
+            <div style="font-size: 0.8rem; color: var(--muted);">
+              Powered by LightGBM + XGBoost ensemble · Updated 2 min ago
+            </div>
+          </div>
+          <span class="chip">AI · Predictive</span>
+        </div>
+
+        <div>
+          <div class="risk-row">
+            <span class="risk-label">On track</span>
+            <div class="risk-bar">
+              <div class="risk-fill risk-green"></div>
+            </div>
+            <span class="risk-value">65%</span>
+          </div>
+          <div class="risk-row">
+            <span class="risk-label">Medium risk</span>
+            <div class="risk-bar">
+              <div class="risk-fill risk-yellow"></div>
+            </div>
+            <span class="risk-value">22%</span>
+          </div>
+          <div class="risk-row">
+            <span class="risk-label">High risk</span>
+            <div class="risk-bar">
+              <div class="risk-fill risk-red"></div>
+            </div>
+            <span class="risk-value">13%</span>
+          </div>
+        </div>
+
+        <p class="hero-footnote">
+          In the full system, clicking a <strong>High risk</strong> shipment
+          opens a detailed panel with ETA change, SHAP-based explanation of
+          delay causes, and a recommended alternative route or carrier.
+        </p>
+      </aside>
+    </section>
+
+    <!-- MISSION -->
+    <section id="mission">
+      <h2 class="section-title">Functional Mission</h2>
+      <p class="section-subtitle">
+        Logistics companies lose money and customer trust when packages arrive
+        late. The Supply Chain Oracle acts as a <strong>“weather forecast” for
+        shipping</strong>, giving managers an early warning of delays and
+        options to fix them before they hit the customer.
+      </p>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3>Problem</h3>
+          <p>
+            Today, teams usually discover a delay only when:
+          </p>
+          <ul>
+            <li>The customer complains</li>
+            <li>The SLA is already broken</li>
+            <li>Operations teams are already firefighting</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Oracle’s Promise</h3>
+          <p>
+            Predict delays early, explain why they will happen, and suggest
+            what to do next:
+          </p>
+          <ul>
+            <li>Fewer surprises in last-mile delivery</li>
+            <li>Better SLA performance and on-time rate</li>
+            <li>Calmer customers and happier managers</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- MVP -->
+    <section id="mvp">
+      <h2 class="section-title">MVP Requirements</h2>
+      <p class="section-subtitle">
+        The first version focuses on three clear capabilities: prediction,
+        explanation, and recommendation.
+      </p>
+
+      <div class="grid-3">
+        <div class="card">
+          <div class="tag">MVP · 01</div>
+          <h3>Prediction</h3>
+          <p>
+            Predict ETA and risk level for each shipment using ML.
+          </p>
+          <ul>
+            <li>ETA for every active shipment</li>
+            <li>Risk flags: On Track / Medium / High</li>
+            <li>Route-level delay stats for managers</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="tag">MVP · 02</div>
+          <h3>Explanation</h3>
+          <p>
+            Tell users <strong>why</strong> a delay is predicted.
+          </p>
+          <ul>
+            <li>SHAP values for feature-level impact</li>
+            <li>Top causes: traffic, weather, hub congestion</li>
+            <li>Carrier history and route reliability</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="tag">MVP · 03</div>
+          <h3>Recommendation</h3>
+          <p>
+            Suggest the best action to reduce delay impact.
+          </p>
+          <ul>
+            <li>Faster alternate routes with ETA gain</li>
+            <li>More reliable carriers for that lane</li>
+            <li>Confidence score for each suggestion</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- AI ENGINE -->
+    <section id="ai-engine">
+      <h2 class="section-title">AI & ML Engine</h2>
+      <p class="section-subtitle">
+        The Supply Chain Oracle uses an ensemble of
+        <strong>LightGBM</strong> and <strong>XGBoost</strong> models, and
+        <strong>SHAP values</strong> for explainability at shipment level.
+      </p>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="tag">Model Stack</div>
+          <h3>LightGBM + XGBoost Ensemble</h3>
+          <p>
+            Two gradient boosting models are trained on shipment, route and
+            carrier data. Their outputs are blended to get stable predictions.
+          </p>
+
+          <div class="stack-badges">
+            <span class="stack-badge">LightGBM · fast & efficient</span>
+            <span class="stack-badge">XGBoost · highly accurate</span>
+            <span class="stack-badge">Ensemble · best of both</span>
+          </div>
+
+          <ul style="margin-top: 0.6rem;">
+            <li>Handles non-linear interactions (route × time × carrier)</li>
+            <li>Scales to thousands of shipments per day</li>
+            <li>Can be retrained regularly as new data arrives</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="tag">Explainability with SHAP</div>
+          <h3>SHAP Values: “Why is this late?”</h3>
+          <p>
+            SHAP (SHapley Additive exPlanations) is used on top of the
+            ensemble to explain each prediction in plain language.
+          </p>
+
+          <div class="shap-bars">
+            <div>
+              <div class="shap-row-label">
+                <span>Hub congestion score</span>
+                <span>+0.40 (delay)</span>
+              </div>
+              <div class="shap-bg">
+                <div class="shap-fill" style="width: 80%;"></div>
+              </div>
+            </div>
+            <div>
+              <div class="shap-row-label">
+                <span>Weather risk level</span>
+                <span>+0.25 (delay)</span>
+              </div>
+              <div class="shap-bg">
+                <div class="shap-fill" style="width: 55%;"></div>
+              </div>
+            </div>
+            <div>
+              <div class="shap-row-label">
+                <span>Carrier on-time score</span>
+                <span>-0.15 (faster)</span>
+              </div>
+              <div class="shap-bg">
+                <div class="shap-fill" style="width: 40%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <p style="margin-top: 0.6rem; font-size: 0.82rem; color: var(--muted);">
+            Example explanation for a manager: “Heavy congestion at Hub-3 and
+            bad weather on Route A-17 are the main reasons this shipment is
+            likely to be late, even though the carrier is usually reliable.”
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTACT / PROJECT INFO -->
+    <section id="contact">
+      <h2 class="section-title">Project Info & Contact</h2>
+      <p class="section-subtitle">
+        Concept and implementation by <strong>udbhav_013</strong>. Use this
+        section to collect demo requests, feedback or interest from logistics
+        companies and mentors.
+      </p>
+
+      <div class="contact-grid">
+        <form
+          class="card form-card"
+          onsubmit="event.preventDefault(); alert('Demo request submitted! (In a real app this would send to your backend or email.)');"
+        >
+          <h3 style="margin-bottom: 0.5rem;">Request a demo</h3>
+
+          <label for="name">Name</label>
+          <input id="name" type="text" placeholder="Your name" required />
+
+          <label for="org">Organization / College Team</label>
+          <input
+            id="org"
+            type="text"
+            placeholder="Your company or team name"
+          />
+
+          <label for="email">Email</label>
+          <input
+            id="email"
+            type="email"
+            placeholder="you@example.com"
+            required
+          />
+
+          <label for="msg">What do you want to explore?</label>
+          <textarea
+            id="msg"
+            placeholder="e.g. We manage 500+ shipments/day and want to try LightGBM + XGBoost + SHAP for delay prediction."
+          ></textarea>
+
+          <button
+            type="submit"
+            class="btn-primary"
+            style="width: 100%; margin-top: 0.3rem;"
+          >
+            Submit
+          </button>
+        </form>
+
+        <div class="card">
+          <div class="tag">Snapshot</div>
+          <h3>The Supply Chain Oracle – Shipment Delay Predictor</h3>
+          <p style="font-size: 0.86rem; margin-top: 0.4rem;">
+            <strong>Mission:</strong> act as a “weather forecast” for shipping
+            by predicting delays before they happen, explaining the reasons and
+            suggesting better routes or carriers.
+          </p>
+          <p style="font-size: 0.86rem; margin-top: 0.6rem;">
+            <strong>Key Features (MVP):</strong>
+          </p>
+          <ul style="margin-top: 0.3rem;">
+            <li>Prediction: ETA & risk flags for each shipment</li>
+            <li>Explanation: SHAP-based reasons for delay</li>
+            <li>Recommendation: better routes/carriers with time saved</li>
+          </ul>
+
+          <p style="font-size: 0.82rem; color: var(--muted); margin-top: 0.7rem;">
+            Tech stack highlight: <strong>LightGBM</strong> +
+            <strong>XGBoost</strong> ensemble with <strong>SHAP</strong> for
+            transparent AI in logistics.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <span>© <span id="year"></span> The Supply Chain Oracle · by udbhav_013</span>
+      <span>AI stack: LightGBM · XGBoost · SHAP</span>
+    </footer>
+  </main>
+
+  <script>
+    // Auto year in footer
+    document.getElementById("year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
